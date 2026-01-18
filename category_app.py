@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QTreeWidget, QTreeWidgetItem, QSpinBox, QGroupBox, 
                              QMessageBox, QLineEdit, QMenu, QCheckBox, QDialog,
                              QTableWidget, QTableWidgetItem, QHeaderView, QInputDialog,
-                             QStyle, QProgressDialog)  # 引入进度条
+                             QStyle, QProgressDialog) 
 from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QAction, QColor, QBrush, QFont, QIcon
 
@@ -73,14 +73,14 @@ class MatchReviewDialog(QDialog):
 class CategoryApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Homedepot 智能工作台 (No Freeze Edition)")
+        self.setWindowTitle("Homedepot 智能工作台 (Final Fix)")
         self.resize(1400, 900)
-        self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_NoFreeze")
+        self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_Final")
         self.current_project_path = None
         self.is_dirty = False
         self.prefix_color_map = {} 
         self.next_color_index = 0
-        self.load_counter = 0 # 计数器
+        self.load_counter = 0 
         
         if platform.system() == "Windows": self.setFont(QFont("Microsoft YaHei UI", 10))
         else: self.setFont(QFont(".AppleSystemUIFont", 12))
@@ -147,48 +147,33 @@ class CategoryApp(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "选择 OPML", "", "OPML (*.opml)")
         if path:
             try: 
-                # 显示模态进度条
                 self.progress = QProgressDialog("正在解析庞大的目录树，请稍候...", "取消", 0, 0, self)
                 self.progress.setWindowModality(Qt.WindowModality.WindowModal)
                 self.progress.show()
-                
-                # 暂时冻结界面更新以提高速度
                 self.tree_widget.setUpdatesEnabled(False) 
                 self.tree_widget.blockSignals(True)       
-                
                 tree = ET.parse(path); root = tree.getroot().find('body')
                 self.tree_widget.clear()
-                
-                self.load_counter = 0 # 重置计数器
+                self.load_counter = 0 
                 self.populate_tree_from_xml(root, self.tree_widget)
-                
                 self.current_project_path = None
                 self.update_status("新项目")
                 self.progress.close()
-                
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
             finally:
                 self.tree_widget.setUpdatesEnabled(True) 
                 self.tree_widget.blockSignals(False)     
 
     def populate_tree_from_xml(self, xml_node, parent):
-        """递归加载，带心跳包"""
-        # 每处理 50 个节点，响应一次系统消息，防止卡死
         self.load_counter += 1
         if self.load_counter % 50 == 0:
             QApplication.processEvents()
-            # 如果用户点了进度条的取消
-            if hasattr(self, 'progress') and self.progress.wasCanceled():
-                return
-
+            if hasattr(self, 'progress') and self.progress.wasCanceled(): return
         for child in xml_node:
             t = child.get('text') or child.get('title')
             if t:
                 item = QTreeWidgetItem(parent)
-                item.setText(0, t)
-                item.setData(0, Qt.ItemDataRole.UserRole, t)
-                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
-                self.set_favorite_state(item, False)
+                item.setText(0, t); item.setData(0, Qt.ItemDataRole.UserRole, t); item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable); self.set_favorite_state(item, False)
                 self.populate_tree_from_xml(child, item)
                 self.set_item_type(item, item.childCount() > 0)
                 item.setExpanded(False)
@@ -198,35 +183,18 @@ class CategoryApp(QMainWindow):
             self.progress = QProgressDialog("正在加载项目...", "取消", 0, 0, self)
             self.progress.show()
             QApplication.processEvents()
-
             with open(path, 'r', encoding='utf-8') as f: data = json.load(f)
-            
-            self.tree_widget.setUpdatesEnabled(False)
-            self.tree_widget.blockSignals(True)
-            self.tree_widget.clear()
-            self.prefix_color_map = {}
-            self.next_color_index = 0
-            self.load_counter = 0
-            
+            self.tree_widget.setUpdatesEnabled(False); self.tree_widget.blockSignals(True)
+            self.tree_widget.clear(); self.prefix_color_map = {}; self.next_color_index = 0; self.load_counter = 0
             self.deserialize_tree(data, self.tree_widget)
-            
-            self.current_project_path = path
-            self.is_dirty = False
-            self.update_status(f"协同: {os.path.basename(path)}")
-            self.settings.setValue("last_project_path", path)
-            self.progress.close()
-            
+            self.current_project_path = path; self.is_dirty = False; self.update_status(f"协同: {os.path.basename(path)}")
+            self.settings.setValue("last_project_path", path); self.progress.close()
         except Exception as e: QMessageBox.warning(self, "Error", str(e))
-        finally:
-            self.tree_widget.setUpdatesEnabled(True)
-            self.tree_widget.blockSignals(False)
+        finally: self.tree_widget.setUpdatesEnabled(True); self.tree_widget.blockSignals(False)
 
     def deserialize_tree(self, data_list, parent):
-        # 递归加载也加心跳
         self.load_counter += 1
-        if self.load_counter % 50 == 0:
-            QApplication.processEvents()
-
+        if self.load_counter % 50 == 0: QApplication.processEvents()
         for node in data_list:
             item = QTreeWidgetItem(parent)
             name = node.get("name", ""); code = node.get("code", ""); remark = node.get("remark", ""); fav = node.get("fav", False)
@@ -234,12 +202,76 @@ class CategoryApp(QMainWindow):
             item.setText(0, name); item.setData(0, Qt.ItemDataRole.UserRole, name)
             item.setText(1, code); self.apply_color_by_code(item, code)
             item.setText(2, remark); self.set_favorite_state(item, fav)
-            self.set_item_type(item, is_folder)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+            self.set_item_type(item, is_folder); item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
             self.deserialize_tree(node.get("children", []), item)
             item.setExpanded(node.get("expanded", False))
 
-    # --- 其他逻辑保持不变 ---
+    # --- 这里补全了之前丢失的核心逻辑！ ---
+    def load_csv_and_update(self):
+        csv_path, _ = QFileDialog.getOpenFileName(self, "选择 CSV", "", "CSV Files (*.csv)")
+        if not csv_path: return
+        self.tree_widget.blockSignals(True)
+        self.tree_widget.setUpdatesEnabled(False) # 冻结
+        try:
+            start_idx = max(0, self.spin_start.value() - 2); end_idx = self.spin_end.value() - 2
+            df = pd.read_csv(csv_path); df.columns = [c.strip() for c in df.columns]
+            subset = df.loc[start_idx:end_idx]
+            csv_rules = {}
+            for _, row in subset.iterrows():
+                p = str(row.get('类目途径', '')).strip(); c = str(row.get('分类', '')).strip()
+                if p and c and c != 'nan':
+                    norm = self.normalize(p); csv_rules[norm] = {"code": c, "leaf": p.replace("\\", "/").split("/")[-1], "raw_path": p}
+            self.pending_exact = []; self.pending_fuzzy = [] 
+            self.scan_matches(self.tree_widget.invisibleRootItem(), [], csv_rules)
+            final = self.pending_exact 
+            if self.pending_fuzzy:
+                self.tree_widget.blockSignals(False)
+                dialog = MatchReviewDialog(self.pending_fuzzy, self)
+                if dialog.exec(): final.extend(dialog.result_list)
+                else: QMessageBox.information(self, "提示", "已取消模糊匹配")
+                self.tree_widget.blockSignals(True)
+            cnt = 0
+            for act in final:
+                item, code = act['item'], act['code']
+                if item.text(1) != code:
+                    item.setText(1, code); self.apply_color_by_code(item, code)
+                    p = item.parent()
+                    while p: p.setExpanded(True); p = p.parent()
+                    cnt += 1
+            self.is_dirty = True; QMessageBox.information(self, "完成", f"更新: {cnt}")
+        except Exception as e: QMessageBox.critical(self, "错误", str(e)); import traceback; traceback.print_exc()
+        finally: 
+            self.tree_widget.setUpdatesEnabled(True) # 恢复
+            self.tree_widget.blockSignals(False)
+
+    def scan_matches(self, item, stack, csv_rules):
+        raw = item.data(0, Qt.ItemDataRole.UserRole); ns = stack + [raw] if raw else []
+        if item.childCount() > 0:
+            for i in range(item.childCount()): self.scan_matches(item.child(i), ns, csv_rules)
+        is_folder = item.data(0, ROLE_IS_FOLDER)
+        if is_folder: return 
+        if raw:
+            norm = self.normalize("/".join(ns))
+            if norm in csv_rules: self.pending_exact.append({"item": item, "code": csv_rules[norm]['code'], "tree_name": raw, "type": "exact"})
+            else: self.check_ocr(item, raw, norm, csv_rules)
+
+    def check_ocr(self, item, raw, norm, rules):
+        keys = list(rules.keys()); m = difflib.get_close_matches(norm, keys, n=1, cutoff=0.75)
+        if m:
+            cand = rules[m[0]]; t_leaf, c_leaf = raw, cand['leaf']
+            if len(t_leaf) > len(c_leaf) + 2: return
+            if c_leaf.lower().startswith(t_leaf.lower()): self.add_fz(item, cand, raw, "⚠️ 尾部截断", cand['raw_path'])
+            elif difflib.SequenceMatcher(None, t_leaf.lower(), c_leaf[:len(t_leaf)].lower()).ratio() > 0.75: self.add_fz(item, cand, raw, "🔡 OCR 错字", cand['raw_path'])
+
+    def add_fz(self, item, dat, t_name, typ, c_path):
+        self.pending_fuzzy.append({"item": item, "code": dat['code'], "tree_name": t_name, "full_path": self.get_full_path(item), "csv_path": c_path, "match_type": typ})
+
+    def on_item_collapsed_recursive(self, item):
+        self.tree_widget.itemCollapsed.disconnect(self.on_item_collapsed_recursive); self.recursive_collapse(item); self.tree_widget.itemCollapsed.connect(self.on_item_collapsed_recursive)
+    def recursive_collapse(self, item):
+        for i in range(item.childCount()): child = item.child(i); child.setExpanded(False); self.recursive_collapse(child)
+    
+    # --- 其他辅助 ---
     def apply_color_by_code(self, item, code):
         if not code or code.strip() == "":
             for col in range(4): item.setBackground(col, QBrush(Qt.GlobalColor.transparent))
@@ -311,6 +343,11 @@ class CategoryApp(QMainWindow):
             ind = "    " * level; rem = f" # {item.text(2)}" if item.text(2) else ""
             f.write(f"{ind}- {item.text(0)} {item.text(1)}{rem}\n")
         for i in range(item.childCount()): self.write_md(item.child(i), f, level + 1)
+    def normalize(self, t): return t.lower().replace(" ", "").replace(">", "/").replace("\\", "/")
+    def get_full_path(self, item):
+        p = []; c = item
+        while c: p.insert(0, c.data(0, Qt.ItemDataRole.UserRole)); c = c.parent()
+        return "/".join(p)
 
 if __name__ == "__main__":
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
