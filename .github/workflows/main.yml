@@ -23,7 +23,7 @@ jobs:
 
     - name: Build with PyInstaller
       run: |
-        pyinstaller --onefile --name="HomeDepotTool" category_app.py
+        pyinstaller --noconsole --onefile --name="HomeDepotTool" category_app.py
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
