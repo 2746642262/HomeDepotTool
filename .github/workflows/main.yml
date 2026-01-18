@@ -2,12 +2,12 @@ name: Build Windows Exe
 
 于:
   推送:
-    分支: [ "main" ]  # 当你推送到 main 分支时触发
-  工作流程调度:      # 允许手动点击按钮触发
+    分支: [ "main" ]
+  工作流程调度:
 
 jobs:
   build:
-    runs-on: windows-latest  # 【关键】指定由 Windows 服务器运行
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v4
@@ -15,14 +15,13 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       包含:
-        python-version: '3.10' # 指定 Python 版本
+        python-version: '3.10'
 
     - name: Install Dependencies
       run: |
         pip install -r requirements.txt
 
     - name: Build with PyInstaller
-      # 这里把 CategoryApp_Final_Universal.py 换成你实际的文件名
       run: |
         pyinstaller --noconsole --onefile --name="HomeDepotTool" category_app.py
 
