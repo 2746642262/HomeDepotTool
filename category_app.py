@@ -14,7 +14,10 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QAction, QColor, QBrush, QFont, QIcon
 
-# ================= 配置 =================
+# ================= 核心修复 1：解除递归限制 =================
+sys.setrecursionlimit(10000) # 防止 OPML 层级太深导致闪退
+# ========================================================
+
 DEFAULT_OPML_FILE = "Homedepot 后台类目路径.opml" 
 ROLE_IS_FOLDER = Qt.ItemDataRole.UserRole + 1 
 
@@ -22,10 +25,9 @@ COLOR_PALETTE = [
     "#FF9999", "#99CCFF", "#99FF99", "#FFE066", "#CC99FF",
     "#FFB366", "#66FFFF", "#FF99CC", "#CCFF33", "#DDDDDD"
 ]
-# =======================================
 
 class MatchReviewDialog(QDialog):
-    """审核对话框"""
+    """审核对话框 (保持不变)"""
     def __init__(self, fuzzy_matches, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"📷 智能路径修复 - 共 {len(fuzzy_matches)} 条待确认")
@@ -73,14 +75,19 @@ class MatchReviewDialog(QDialog):
 class CategoryApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Homedepot 智能工作台 (Final Fix)")
+        self.setWindowTitle("Homedepot 智能工作台 (Ultra Fast)")
         self.resize(1400, 900)
-        self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_Final")
+        self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_Ultra")
         self.current_project_path = None
         self.is_dirty = False
         self.prefix_color_map = {} 
         self.next_color_index = 0
-        self.load_counter = 0 
+        
+        # ================= 核心修复 2：图标缓存 =================
+        # 提前获取图标，避免在几万次的循环中重复请求系统资源，这能极大提速
+        self.icon_folder = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+        self.icon_file = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
+        # ======================================================
         
         if platform.system() == "Windows": self.setFont(QFont("Microsoft YaHei UI", 10))
         else: self.setFont(QFont(".AppleSystemUIFont", 12))
@@ -114,14 +121,12 @@ class CategoryApp(QMainWindow):
         self.tree_widget.setAlternatingRowColors(False); self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_widget.customContextMenuRequested.connect(self.open_context_menu); main_layout.addWidget(self.tree_widget)
 
-    # --- 辅助方法 ---
     def set_item_type(self, item, is_folder):
         item.setData(0, ROLE_IS_FOLDER, is_folder)
-        if is_folder: icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
-        else: icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
-        item.setIcon(0, icon)
+        # 使用缓存的图标，飞快！
+        if is_folder: item.setIcon(0, self.icon_folder)
+        else: item.setIcon(0, self.icon_file)
 
-    # --- 搜索逻辑 ---
     def perform_fuzzy_search(self):
         t = self.search_input.text().strip()
         if not t: return
@@ -142,59 +147,61 @@ class CategoryApp(QMainWindow):
             self.statusBar().showMessage(f"已定位: {best.text(0)}")
         else: QMessageBox.warning(self, "提示", "未找到匹配项")
 
-    # --- 核心性能优化区 ---
+    # --- 极速加载逻辑 ---
     def new_project_from_opml(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择 OPML", "", "OPML (*.opml)")
         if path:
             try: 
-                self.progress = QProgressDialog("正在解析庞大的目录树，请稍候...", "取消", 0, 0, self)
-                self.progress.setWindowModality(Qt.WindowModality.WindowModal)
-                self.progress.show()
+                # 这里不使用 processEvents 了，因为它会显著拖慢大文件的加载速度
+                # 改为彻底冻结界面，追求极致速度
                 self.tree_widget.setUpdatesEnabled(False) 
                 self.tree_widget.blockSignals(True)       
+                
+                # 临时关闭排序，这非常重要！
+                self.tree_widget.setSortingEnabled(False)
+
                 tree = ET.parse(path); root = tree.getroot().find('body')
                 self.tree_widget.clear()
-                self.load_counter = 0 
                 self.populate_tree_from_xml(root, self.tree_widget)
+                
                 self.current_project_path = None
                 self.update_status("新项目")
-                self.progress.close()
+                
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
             finally:
                 self.tree_widget.setUpdatesEnabled(True) 
                 self.tree_widget.blockSignals(False)     
 
     def populate_tree_from_xml(self, xml_node, parent):
-        self.load_counter += 1
-        if self.load_counter % 50 == 0:
-            QApplication.processEvents()
-            if hasattr(self, 'progress') and self.progress.wasCanceled(): return
+        # 纯粹的递归，没有任何多余的计算
         for child in xml_node:
             t = child.get('text') or child.get('title')
             if t:
                 item = QTreeWidgetItem(parent)
-                item.setText(0, t); item.setData(0, Qt.ItemDataRole.UserRole, t); item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable); self.set_favorite_state(item, False)
+                item.setText(0, t)
+                item.setData(0, Qt.ItemDataRole.UserRole, t)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+                # 默认不设置 favorite，节省时间
+                # 递归
                 self.populate_tree_from_xml(child, item)
-                self.set_item_type(item, item.childCount() > 0)
+                
+                # 逻辑判断
+                has_children = item.childCount() > 0
+                self.set_item_type(item, has_children)
                 item.setExpanded(False)
 
     def load_project_from_path(self, path):
         try:
-            self.progress = QProgressDialog("正在加载项目...", "取消", 0, 0, self)
-            self.progress.show()
-            QApplication.processEvents()
             with open(path, 'r', encoding='utf-8') as f: data = json.load(f)
-            self.tree_widget.setUpdatesEnabled(False); self.tree_widget.blockSignals(True)
-            self.tree_widget.clear(); self.prefix_color_map = {}; self.next_color_index = 0; self.load_counter = 0
+            self.tree_widget.setUpdatesEnabled(False); self.tree_widget.blockSignals(True); self.tree_widget.setSortingEnabled(False)
+            self.tree_widget.clear(); self.prefix_color_map = {}; self.next_color_index = 0
             self.deserialize_tree(data, self.tree_widget)
             self.current_project_path = path; self.is_dirty = False; self.update_status(f"协同: {os.path.basename(path)}")
-            self.settings.setValue("last_project_path", path); self.progress.close()
+            self.settings.setValue("last_project_path", path)
         except Exception as e: QMessageBox.warning(self, "Error", str(e))
         finally: self.tree_widget.setUpdatesEnabled(True); self.tree_widget.blockSignals(False)
 
     def deserialize_tree(self, data_list, parent):
-        self.load_counter += 1
-        if self.load_counter % 50 == 0: QApplication.processEvents()
         for node in data_list:
             item = QTreeWidgetItem(parent)
             name = node.get("name", ""); code = node.get("code", ""); remark = node.get("remark", ""); fav = node.get("fav", False)
@@ -206,12 +213,11 @@ class CategoryApp(QMainWindow):
             self.deserialize_tree(node.get("children", []), item)
             item.setExpanded(node.get("expanded", False))
 
-    # --- 这里补全了之前丢失的核心逻辑！ ---
     def load_csv_and_update(self):
         csv_path, _ = QFileDialog.getOpenFileName(self, "选择 CSV", "", "CSV Files (*.csv)")
         if not csv_path: return
         self.tree_widget.blockSignals(True)
-        self.tree_widget.setUpdatesEnabled(False) # 冻结
+        self.tree_widget.setUpdatesEnabled(False)
         try:
             start_idx = max(0, self.spin_start.value() - 2); end_idx = self.spin_end.value() - 2
             df = pd.read_csv(csv_path); df.columns = [c.strip() for c in df.columns]
@@ -240,9 +246,7 @@ class CategoryApp(QMainWindow):
                     cnt += 1
             self.is_dirty = True; QMessageBox.information(self, "完成", f"更新: {cnt}")
         except Exception as e: QMessageBox.critical(self, "错误", str(e)); import traceback; traceback.print_exc()
-        finally: 
-            self.tree_widget.setUpdatesEnabled(True) # 恢复
-            self.tree_widget.blockSignals(False)
+        finally: self.tree_widget.setUpdatesEnabled(True); self.tree_widget.blockSignals(False)
 
     def scan_matches(self, item, stack, csv_rules):
         raw = item.data(0, Qt.ItemDataRole.UserRole); ns = stack + [raw] if raw else []
@@ -271,7 +275,36 @@ class CategoryApp(QMainWindow):
     def recursive_collapse(self, item):
         for i in range(item.childCount()): child = item.child(i); child.setExpanded(False); self.recursive_collapse(child)
     
-    # --- 其他辅助 ---
+    def normalize(self, t): return t.lower().replace(" ", "").replace(">", "/").replace("\\", "/")
+    def get_full_path(self, item):
+        p = []; c = item
+        while c: p.insert(0, c.data(0, Qt.ItemDataRole.UserRole)); c = c.parent()
+        return "/".join(p)
+    def save_project(self):
+        if not self.current_project_path: path, _ = QFileDialog.getSaveFileName(self, "Save", "Team.json", "JSON (*.json)"); 
+        else: path = self.current_project_path
+        if not path: return
+        self.current_project_path = path; data = self.serialize_tree(self.tree_widget.invisibleRootItem())
+        with open(self.current_project_path, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=2)
+        self.settings.setValue("last_project_path", self.current_project_path); self.is_dirty = False; self.update_status(f"Saved: {os.path.basename(self.current_project_path)}")
+    def load_last_session(self):
+        p = self.settings.value("last_project_path")
+        if p and os.path.exists(p): self.load_project_from_path(p)
+    def reload_project(self):
+        if self.current_project_path: self.load_project_from_path(self.current_project_path)
+    def update_status(self, t): self.lbl_status.setText(f"状态: {t}"); self.lbl_status.setStyleSheet("color: red; font-weight: bold;" if "未保存" in t else "color: green;")
+    def export_markdown(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export", "Catalog.txt", "Text (*.txt)")
+        if path:
+            with open(path, 'w', encoding='utf-8') as f: self.write_md(self.tree_widget.invisibleRootItem(), f, -1)
+            QMessageBox.information(self, "Success", "Done")
+    def write_md(self, item, f, level):
+        if level >= 0:
+            ind = "    " * level; rem = f" # {item.text(2)}" if item.text(2) else ""
+            f.write(f"{ind}- {item.text(0)} {item.text(1)}{rem}\n")
+        for i in range(item.childCount()): self.write_md(item.child(i), f, level + 1)
+    
+    # --- 辅助 ---
     def apply_color_by_code(self, item, code):
         if not code or code.strip() == "":
             for col in range(4): item.setBackground(col, QBrush(Qt.GlobalColor.transparent))
@@ -320,34 +353,6 @@ class CategoryApp(QMainWindow):
     def open_project_manual(self):
         path, _ = QFileDialog.getOpenFileName(self, "JSON", "", "JSON (*.json)")
         if path: self.load_project_from_path(path)
-    def save_project(self):
-        if not self.current_project_path: path, _ = QFileDialog.getSaveFileName(self, "Save", "Team.json", "JSON (*.json)"); 
-        else: path = self.current_project_path
-        if not path: return
-        self.current_project_path = path; data = self.serialize_tree(self.tree_widget.invisibleRootItem())
-        with open(self.current_project_path, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=2)
-        self.settings.setValue("last_project_path", self.current_project_path); self.is_dirty = False; self.update_status(f"Saved: {os.path.basename(self.current_project_path)}")
-    def load_last_session(self):
-        p = self.settings.value("last_project_path")
-        if p and os.path.exists(p): self.load_project_from_path(p)
-    def reload_project(self):
-        if self.current_project_path: self.load_project_from_path(self.current_project_path)
-    def update_status(self, t): self.lbl_status.setText(f"状态: {t}"); self.lbl_status.setStyleSheet("color: red; font-weight: bold;" if "未保存" in t else "color: green;")
-    def export_markdown(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Export", "Catalog.txt", "Text (*.txt)")
-        if path:
-            with open(path, 'w', encoding='utf-8') as f: self.write_md(self.tree_widget.invisibleRootItem(), f, -1)
-            QMessageBox.information(self, "Success", "Done")
-    def write_md(self, item, f, level):
-        if level >= 0:
-            ind = "    " * level; rem = f" # {item.text(2)}" if item.text(2) else ""
-            f.write(f"{ind}- {item.text(0)} {item.text(1)}{rem}\n")
-        for i in range(item.childCount()): self.write_md(item.child(i), f, level + 1)
-    def normalize(self, t): return t.lower().replace(" ", "").replace(">", "/").replace("\\", "/")
-    def get_full_path(self, item):
-        p = []; c = item
-        while c: p.insert(0, c.data(0, Qt.ItemDataRole.UserRole)); c = c.parent()
-        return "/".join(p)
 
 if __name__ == "__main__":
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
