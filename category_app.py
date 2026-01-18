@@ -40,10 +40,12 @@ class MatchReviewDialog(QDialog):
         else: font.setPointSize(12)
         lbl.setFont(font); lbl.setStyleSheet("color: #E65100; margin-bottom: 10px; background-color: transparent;")
         layout.addWidget(lbl)
-        self.table = QTableWidget(); self.table.setColumnCount(4)
+        self.table = QTableWidget(); 
+        self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(["选择", "错误类型", "路径对比 (上:OCR / 下:CSV)", "应用编码"])
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed); self.table.setColumnWidth(0, 60) 
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed); 
+        self.table.setColumnWidth(0, 60) 
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch) 
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
@@ -51,16 +53,32 @@ class MatchReviewDialog(QDialog):
         self.fuzzy_matches = fuzzy_matches
         self.table.setRowCount(len(fuzzy_matches) * 2)
         font_mono = QFont("Menlo" if platform.system() == "Darwin" else "Consolas", 10) 
-        font_bold = QFont(); font_bold.setBold(True); 
-        if platform.system() == "Windows": font_bold.setFamily("Microsoft YaHei UI")
+        font_bold = QFont(); 
+        font_bold.setBold(True); 
+        if platform.system() == "Windows": 
+          font_bold.setFamily("Microsoft YaHei UI")
         for i, match in enumerate(fuzzy_matches):
             row_top = i * 2; row_bottom = i * 2 + 1
-            item_check = QTableWidgetItem(); item_check.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled); item_check.setCheckState(Qt.CheckState.Checked); self.table.setItem(row_top, 0, item_check); self.table.setSpan(row_top, 0, 2, 1) 
-            type_text = match['match_type']; item_type = QTableWidgetItem(type_text); item_type.setTextAlignment(Qt.AlignmentFlag.AlignCenter); item_type.setFont(font_bold)
-            if "截断" in type_text: item_type.setForeground(QBrush(QColor("purple")))
-            self.table.setItem(row_top, 1, item_type); self.table.setSpan(row_top, 1, 2, 1)
-            item_tree = QTableWidgetItem(f"🔴 识别: {match['full_path']}"); item_tree.setBackground(QColor("#FFF3E0")); item_tree.setFont(font_mono); item_tree.setToolTip(match['full_path']); self.table.setItem(row_top, 2, item_tree)
-            item_csv = QTableWidgetItem(f"🟢 标准: {match['csv_path']}"); item_csv.setBackground(QColor("#E8F5E9")); item_csv.setFont(font_mono); item_csv.setToolTip(match['csv_path']); self.table.setItem(row_bottom, 2, item_csv)
+            item_check = QTableWidgetItem(); 
+            item_check.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled); 
+            item_check.setCheckState(Qt.CheckState.Checked); 
+            self.table.setItem(row_top, 0, item_check); self.table.setSpan(row_top, 0, 2, 1) 
+            type_text = match['match_type']; 
+            item_type = QTableWidgetItem(type_text); 
+            item_type.setTextAlignment(Qt.AlignmentFlag.AlignCenter); 
+            item_type.setFont(font_bold)
+            if "截断" in type_text: 
+              item_type.setForeground(QBrush(QColor("purple")))
+            self.table.setItem(row_top, 1, item_type); 
+            self.table.setSpan(row_top, 1, 2, 1)
+            item_tree = QTableWidgetItem(f"🔴 识别: {match['full_path']}"); 
+            item_tree.setBackground(QColor("#FFF3E0")); 
+            item_tree.setFont(font_mono); 
+            item_tree.setToolTip(match['full_path']);
+            self.table.setItem(row_top, 2, item_tree)
+            item_csv = QTableWidgetItem(f"🟢 标准: {match['csv_path']}"); 
+            item_csv.setBackground(QColor("#E8F5E9")); 
+            item_csv.setFont(font_mono); item_csv.setToolTip(match['csv_path']); self.table.setItem(row_bottom, 2, item_csv)
             item_code = QTableWidgetItem(match['code']); item_code.setTextAlignment(Qt.AlignmentFlag.AlignCenter); item_code.setForeground(QBrush(QColor("blue"))); item_code.setFont(font_bold); self.table.setItem(row_top, 3, item_code); self.table.setSpan(row_top, 3, 2, 1)
         layout.addWidget(self.table)
         btn_box = QHBoxLayout()
@@ -75,7 +93,7 @@ class MatchReviewDialog(QDialog):
 class CategoryApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Homedepot 智能工作台 (Ultra Fast)")
+        self.setWindowTitle("Homedepot 智能工作台")
         self.resize(1400, 900)
         self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_Ultra")
         self.current_project_path = None
@@ -116,10 +134,15 @@ class CategoryApp(QMainWindow):
         op_layout.addWidget(self.search_input); op_layout.addWidget(self.btn_csv); op_layout.addWidget(self.spin_start); op_layout.addWidget(self.spin_end); op_layout.addWidget(self.btn_export)
         main_layout.addLayout(op_layout)
         self.tree_widget = QTreeWidget(); self.tree_widget.setHeaderLabels(["类目结构", "编码 (Code)", "备注", "收藏"])
-        self.tree_widget.setColumnWidth(0, 500); self.tree_widget.setColumnWidth(1, 150); self.tree_widget.setColumnWidth(2, 200); self.tree_widget.setColumnWidth(3, 50)
+        self.tree_widget.setColumnWidth(0, 500); 
+        self.tree_widget.setColumnWidth(1, 150); 
+        self.tree_widget.setColumnWidth(2, 500); 
+        self.tree_widget.setColumnWidth(3, 50)
         self.tree_widget.setStyleSheet("QTreeWidget::item:selected { background-color: black; color: white; }")
-        self.tree_widget.setAlternatingRowColors(False); self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.tree_widget.customContextMenuRequested.connect(self.open_context_menu); main_layout.addWidget(self.tree_widget)
+        self.tree_widget.setAlternatingRowColors(False); 
+        self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree_widget.customContextMenuRequested.connect(self.open_context_menu); 
+        main_layout.addWidget(self.tree_widget)
 
     def set_item_type(self, item, is_folder):
         item.setData(0, ROLE_IS_FOLDER, is_folder)
