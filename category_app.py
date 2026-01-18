@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import difflib
 import xml.etree.ElementTree as ET
-import platform  # 用于检测系统
+import platform 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QLabel, QFileDialog, 
                              QTreeWidget, QTreeWidgetItem, QSpinBox, QGroupBox, 
@@ -18,7 +18,6 @@ from PyQt6.QtGui import QAction, QColor, QBrush, QFont, QIcon
 DEFAULT_OPML_FILE = "Homedepot 后台类目路径.opml" 
 ROLE_IS_FOLDER = Qt.ItemDataRole.UserRole + 1 
 
-# 新版颜色池：高区分度
 COLOR_PALETTE = [
     "#FF9999", "#99CCFF", "#99FF99", "#FFE066", "#CC99FF",
     "#FFB366", "#66FFFF", "#FF99CC", "#CCFF33", "#DDDDDD"
@@ -36,14 +35,13 @@ class MatchReviewDialog(QDialog):
         layout = QVBoxLayout(self)
         lbl = QLabel("请对比路径差异：(上方橙色为识别结果，下方绿色为标准结果)")
         
-        # 字体适配
         font = QFont()
         font.setBold(True)
         if platform.system() == "Windows":
             font.setFamily("Microsoft YaHei UI")
             font.setPointSize(10)
         else:
-            font.setPointSize(12) # Mac字体默认小，调大一点
+            font.setPointSize(12)
         
         lbl.setFont(font)
         lbl.setStyleSheet("color: #E65100; margin-bottom: 10px; background-color: transparent;")
@@ -64,7 +62,6 @@ class MatchReviewDialog(QDialog):
         self.fuzzy_matches = fuzzy_matches
         self.table.setRowCount(len(fuzzy_matches) * 2)
         
-        # 字体设置
         font_mono = QFont("Menlo" if platform.system() == "Darwin" else "Consolas", 10) 
         font_bold = QFont()
         font_bold.setBold(True)
@@ -134,19 +131,18 @@ class MatchReviewDialog(QDialog):
 class CategoryApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Homedepot 智能工作台 (Universal Stable)")
+        self.setWindowTitle("Homedepot 智能工作台")
         self.resize(1400, 900)
-        self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_Universal")
+        self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_Perf")
         self.current_project_path = None
         self.is_dirty = False
         self.prefix_color_map = {} 
         self.next_color_index = 0
         
-        # --- 系统字体自动适配 ---
         if platform.system() == "Windows":
             self.setFont(QFont("Microsoft YaHei UI", 10))
         else:
-            self.setFont(QFont(".AppleSystemUIFont", 12)) # Mac 默认字体
+            self.setFont(QFont(".AppleSystemUIFont", 12))
             
         self.init_ui()
         self.tree_widget.itemCollapsed.connect(self.on_item_collapsed_recursive)
@@ -159,7 +155,6 @@ class CategoryApp(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # 顶部
         project_group = QGroupBox("📁 项目协同")
         project_layout = QHBoxLayout()
         self.lbl_status = QLabel("状态: 等待加载")
@@ -180,7 +175,6 @@ class CategoryApp(QMainWindow):
         project_group.setLayout(project_layout)
         main_layout.addWidget(project_group)
 
-        # 操作区
         op_layout = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 搜索...")
@@ -205,7 +199,6 @@ class CategoryApp(QMainWindow):
         op_layout.addWidget(self.btn_export)
         main_layout.addLayout(op_layout)
 
-        # 底部目录树
         self.tree_widget = QTreeWidget()
         self.tree_widget.setHeaderLabels(["类目结构", "编码 (Code)", "备注", "收藏"])
         self.tree_widget.setColumnWidth(0, 500)
@@ -238,7 +231,6 @@ class CategoryApp(QMainWindow):
     def perform_fuzzy_search(self):
         t = self.search_input.text().strip()
         if not t: return
-        
         self.tree_widget.clearSelection()
         self.tree_widget.collapseAll()
         
@@ -250,7 +242,6 @@ class CategoryApp(QMainWindow):
             item = it.value()
             raw = item.data(0, Qt.ItemDataRole.UserRole)
             if raw is None: raw = "" 
-            
             path = self.get_full_path(item)
             s = max(difflib.SequenceMatcher(None, t.lower(), path.lower()).ratio(), 
                     difflib.SequenceMatcher(None, t.lower(), raw.lower()).ratio())
@@ -343,7 +334,6 @@ class CategoryApp(QMainWindow):
         text, ok = QInputDialog.getText(self, "重命名", "新名称:", text=item.text(0))
         if ok and text: item.setText(0, text)
     
-    # 【已修复】PyQt6 兼容写法
     def action_delete(self, item):
         reply = QMessageBox.question(self, "确认删除", f"确定要删除 '{item.text(0)}' 吗？",
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
@@ -380,6 +370,9 @@ class CategoryApp(QMainWindow):
 
     def deserialize_tree(self, data_list, parent):
         self.tree_widget.blockSignals(True)
+        # 冻结更新
+        self.tree_widget.setUpdatesEnabled(False)
+        
         for node in data_list:
             item = QTreeWidgetItem(parent)
             name = node.get("name", ""); code = node.get("code", ""); remark = node.get("remark", ""); fav = node.get("fav", False)
@@ -392,12 +385,16 @@ class CategoryApp(QMainWindow):
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
             self.deserialize_tree(node.get("children", []), item)
             item.setExpanded(node.get("expanded", False))
+            
+        # 恢复更新
+        self.tree_widget.setUpdatesEnabled(True)
         self.tree_widget.blockSignals(False)
 
     def load_csv_and_update(self):
         csv_path, _ = QFileDialog.getOpenFileName(self, "选择 CSV", "", "CSV Files (*.csv)")
         if not csv_path: return
         self.tree_widget.blockSignals(True)
+        self.tree_widget.setUpdatesEnabled(False) # 冻结
         try:
             start_idx = max(0, self.spin_start.value() - 2); end_idx = self.spin_end.value() - 2
             df = pd.read_csv(csv_path); df.columns = [c.strip() for c in df.columns]
@@ -426,7 +423,9 @@ class CategoryApp(QMainWindow):
                     cnt += 1
             self.is_dirty = True; QMessageBox.information(self, "完成", f"更新: {cnt}")
         except Exception as e: QMessageBox.critical(self, "错误", str(e)); import traceback; traceback.print_exc()
-        finally: self.tree_widget.blockSignals(False)
+        finally: 
+            self.tree_widget.setUpdatesEnabled(True) # 恢复
+            self.tree_widget.blockSignals(False)
 
     def scan_matches(self, item, stack, csv_rules):
         raw = item.data(0, Qt.ItemDataRole.UserRole); ns = stack + [raw] if raw else []
@@ -451,7 +450,9 @@ class CategoryApp(QMainWindow):
         self.pending_fuzzy.append({"item": item, "code": dat['code'], "tree_name": t_name, "full_path": self.get_full_path(item), "csv_path": c_path, "match_type": typ})
 
     def on_item_collapsed_recursive(self, item):
-        self.tree_widget.itemCollapsed.disconnect(self.on_item_collapsed_recursive); self.recursive_collapse(item); self.tree_widget.itemCollapsed.connect(self.on_item_collapsed_recursive)
+        self.tree_widget.itemCollapsed.disconnect(self.on_item_collapsed_recursive)
+        self.recursive_collapse(item)
+        self.tree_widget.itemCollapsed.connect(self.on_item_collapsed_recursive)
     def recursive_collapse(self, item):
         for i in range(item.childCount()): child = item.child(i); child.setExpanded(False); self.recursive_collapse(child)
     
@@ -460,11 +461,27 @@ class CategoryApp(QMainWindow):
         p = []; c = item
         while c: p.insert(0, c.data(0, Qt.ItemDataRole.UserRole)); c = c.parent()
         return "/".join(p)
+
+    # --- 性能优化核心 ---
     def new_project_from_opml(self):
         path, _ = QFileDialog.getOpenFileName(self, "OPML", "", "OPML (*.opml)")
         if path:
-            try: tree = ET.parse(path); root = tree.getroot().find('body'); self.tree_widget.clear(); self.populate_tree_from_xml(root, self.tree_widget); self.current_project_path = None; self.update_status("新项目")
+            try: 
+                self.tree_widget.setUpdatesEnabled(False) # 1. 冻结界面
+                self.tree_widget.blockSignals(True)       # 2. 阻断信号
+                
+                tree = ET.parse(path); root = tree.getroot().find('body')
+                self.tree_widget.clear()
+                self.populate_tree_from_xml(root, self.tree_widget)
+                
+                self.current_project_path = None
+                self.update_status("新项目")
+                
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
+            finally:
+                self.tree_widget.setUpdatesEnabled(True) # 3. 恢复界面
+                self.tree_widget.blockSignals(False)     # 4. 恢复信号
+
     def populate_tree_from_xml(self, xml_node, parent):
         for child in xml_node:
             t = child.get('text') or child.get('title')
@@ -473,13 +490,16 @@ class CategoryApp(QMainWindow):
                 self.populate_tree_from_xml(child, item)
                 self.set_item_type(item, item.childCount() > 0)
                 item.setExpanded(False)
+    
     def open_project_manual(self):
         path, _ = QFileDialog.getOpenFileName(self, "JSON", "", "JSON (*.json)")
         if path: self.load_project_from_path(path)
     def load_project_from_path(self, path):
         try:
             with open(path, 'r', encoding='utf-8') as f: data = json.load(f)
-            self.tree_widget.clear(); self.prefix_color_map = {}; self.next_color_index = 0; self.deserialize_tree(data, self.tree_widget); self.current_project_path = path; self.is_dirty = False; self.update_status(f"协同: {os.path.basename(path)}")
+            self.tree_widget.clear(); self.prefix_color_map = {}; self.next_color_index = 0
+            self.deserialize_tree(data, self.tree_widget)
+            self.current_project_path = path; self.is_dirty = False; self.update_status(f"协同: {os.path.basename(path)}")
             self.settings.setValue("last_project_path", path)
         except Exception as e: QMessageBox.warning(self, "Error", str(e))
     def save_project(self):
@@ -511,7 +531,6 @@ if __name__ == "__main__":
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
     
-    # 全局强制白天模式 (防止深色模式影响)
     app.setStyleSheet("""
         QWidget { background-color: #FFFFFF; color: #000000; }
         QTreeWidget, QTableWidget, QListWidget { background-color: #FFFFFF; color: #000000; border: 1px solid #D0D0D0; alternate-background-color: #FFFFFF; }
