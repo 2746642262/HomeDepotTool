@@ -22,10 +22,18 @@ sys.setrecursionlimit(20000)
 DEFAULT_OPML_FILE = "Homedepot 后台类目路径.opml" 
 ROLE_IS_FOLDER = Qt.ItemDataRole.UserRole + 1 
 
-# 新版颜色池：高区分度
+# 颜色池：高清马卡龙色系
 COLOR_PALETTE = [
-    "#FF9999", "#99CCFF", "#99FF99", "#FFE066", "#CC99FF",
-    "#FFB366", "#66FFFF", "#FF99CC", "#CCFF33", "#DDDDDD"
+    "#FFCDD2", # 1. 柔红 (Red) - 像草莓牛奶
+    "#BBDEFB", # 2. 柔蓝 (Blue) - 像晴朗天空
+    "#C8E6C9", # 3. 柔绿 (Green) - 像抹茶
+    "#FFF9C4", # 4. 柔黄 (Yellow) - 像淡奶油
+    "#D1C4E9", # 5. 柔紫 (Purple) - 像香芋
+    "#FFE0B2", # 6. 柔橙 (Orange) - 像杏子
+    "#B2EBF2", # 7. 柔青 (Cyan) - 像薄荷 (和蓝、绿都能分开)
+    "#F8BBD0", # 8. 柔粉 (Pink) - 像樱花 (和红能分开)
+    "#CFD8DC", # 9. 蓝灰 (Blue Grey) - 高级灰
+    "#F0F4C3"  # 10. 青柠 (Lime) - 像青柠檬 (介于黄绿之间)
 ]
 # =======================================
 
