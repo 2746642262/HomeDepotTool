@@ -21,20 +21,12 @@ sys.setrecursionlimit(20000)
 DEFAULT_OPML_FILE = "Homedepot 后台类目路径.opml" 
 ROLE_IS_FOLDER = Qt.ItemDataRole.UserRole + 1 
 
-# ================= 修复 2: 高清马卡龙色系 (护眼且区分度高) =================
+# ================= 修复 2: 高清马卡龙色系 =================
 COLOR_PALETTE = [
-    "#FFCDD2", # 1. 柔红
-    "#BBDEFB", # 2. 柔蓝
-    "#C8E6C9", # 3. 柔绿
-    "#FFF9C4", # 4. 柔黄
-    "#D1C4E9", # 5. 柔紫
-    "#FFE0B2", # 6. 柔橙
-    "#B2EBF2", # 7. 柔青 (薄荷)
-    "#F8BBD0", # 8. 柔粉 (樱花)
-    "#CFD8DC", # 9. 蓝灰
-    "#F0F4C3"  # 10. 青柠
+    "#FFCDD2", "#BBDEFB", "#C8E6C9", "#FFF9C4", "#D1C4E9",
+    "#FFE0B2", "#B2EBF2", "#F8BBD0", "#CFD8DC", "#F0F4C3"
 ]
-# ======================================================================
+# ========================================================
 
 class MatchReviewDialog(QDialog):
     """审核对话框"""
@@ -85,9 +77,9 @@ class MatchReviewDialog(QDialog):
 class CategoryApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Homedepot 智能工作台 (Sorted Pro)")
+        self.setWindowTitle("Homedepot 智能工作台 (Fix v2)")
         self.resize(1400, 900)
-        self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_Sorted")
+        self.settings = QSettings("LiKaixuan_Studio", "CategoryTool_Fix2")
         self.current_project_path = None
         self.is_dirty = False
         self.prefix_color_map = {} 
@@ -130,10 +122,9 @@ class CategoryApp(QMainWindow):
         self.tree_widget.setAlternatingRowColors(False); self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_widget.customContextMenuRequested.connect(self.open_context_menu); main_layout.addWidget(self.tree_widget)
         
-        # ================= 修复 4: 开启默认排序 =================
+        # 修复 4: 开启默认排序
         self.tree_widget.setSortingEnabled(True)
-        self.tree_widget.sortByColumn(0, Qt.SortOrder.AscendingOrder) # 按第一列(名称) A-Z 排序
-        # ======================================================
+        self.tree_widget.sortByColumn(0, Qt.SortOrder.AscendingOrder)
 
     def set_item_type(self, item, is_folder):
         item.setData(0, ROLE_IS_FOLDER, is_folder)
@@ -167,11 +158,7 @@ class CategoryApp(QMainWindow):
                 self.progress = QProgressDialog("正在解析庞大的目录树，请稍候...", "取消", 0, 0, self)
                 self.progress.setWindowModality(Qt.WindowModality.WindowModal)
                 self.progress.show()
-                
-                # --- 加载时暂停排序和刷新，保证速度 ---
-                self.tree_widget.setUpdatesEnabled(False) 
-                self.tree_widget.blockSignals(True)       
-                self.tree_widget.setSortingEnabled(False) # 暂停排序
+                self.tree_widget.setUpdatesEnabled(False); self.tree_widget.blockSignals(True); self.tree_widget.setSortingEnabled(False)
                 
                 tree = ET.parse(path); root = tree.getroot().find('body')
                 self.tree_widget.clear()
@@ -182,10 +169,7 @@ class CategoryApp(QMainWindow):
                 self.progress.close()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
             finally:
-                # --- 加载完恢复排序，自动理顺 ---
-                self.tree_widget.setUpdatesEnabled(True) 
-                self.tree_widget.blockSignals(False)
-                self.tree_widget.setSortingEnabled(True) # 恢复排序
+                self.tree_widget.setUpdatesEnabled(True); self.tree_widget.blockSignals(False); self.tree_widget.setSortingEnabled(True)
 
     def populate_tree_from_xml(self, xml_node, parent):
         self.load_counter += 1
@@ -208,21 +192,32 @@ class CategoryApp(QMainWindow):
             QApplication.processEvents()
             with open(path, 'r', encoding='utf-8') as f: data = json.load(f)
             
-            # 暂停
             self.tree_widget.setUpdatesEnabled(False); self.tree_widget.blockSignals(True); self.tree_widget.setSortingEnabled(False)
-            
             self.tree_widget.clear(); self.prefix_color_map = {}; self.next_color_index = 0; self.load_counter = 0
-            self.deserialize_tree(data, self.tree_widget)
+            
+            # ================= 关键修复: 兼容 List 和 Dict 两种数据结构 =================
+            if isinstance(data, list):
+                # 如果是列表，直接加载（老版本数据）
+                self.deserialize_tree(data, self.tree_widget)
+            elif isinstance(data, dict):
+                # 如果是字典，说明是新版本保存的根节点，提取 children
+                children = data.get("children", [])
+                self.deserialize_tree(children, self.tree_widget)
+            # =======================================================================
+            
             self.current_project_path = path; self.is_dirty = False; self.update_status(f"协同: {os.path.basename(path)}")
             self.settings.setValue("last_project_path", path); self.progress.close()
         except Exception as e: QMessageBox.warning(self, "Error", str(e))
         finally: 
-            # 恢复
             self.tree_widget.setUpdatesEnabled(True); self.tree_widget.blockSignals(False); self.tree_widget.setSortingEnabled(True)
 
     def deserialize_tree(self, data_list, parent):
         self.load_counter += 1
         if self.load_counter % 50 == 0: QApplication.processEvents()
+        
+        # 确保 data_list 是列表，防止意外 crash
+        if not isinstance(data_list, list): return
+
         for node in data_list:
             item = QTreeWidgetItem(parent)
             name = node.get("name", ""); code = node.get("code", ""); remark = node.get("remark", ""); fav = node.get("fav", False)
@@ -237,9 +232,7 @@ class CategoryApp(QMainWindow):
     def load_csv_and_update(self):
         csv_path, _ = QFileDialog.getOpenFileName(self, "选择 CSV", "", "CSV Files (*.csv)")
         if not csv_path: return
-        self.tree_widget.blockSignals(True)
-        self.tree_widget.setUpdatesEnabled(False) 
-        self.tree_widget.setSortingEnabled(False) # CSV 更新时也暂停排序，避免每更新一行就重排一次
+        self.tree_widget.blockSignals(True); self.tree_widget.setUpdatesEnabled(False); self.tree_widget.setSortingEnabled(False) 
         try:
             start_idx = max(0, self.spin_start.value() - 2); end_idx = self.spin_end.value() - 2
             df = pd.read_csv(csv_path); df.columns = [c.strip() for c in df.columns]
@@ -378,7 +371,6 @@ class CategoryApp(QMainWindow):
 if __name__ == "__main__":
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
-    
     app.setStyleSheet("""
         QWidget { background-color: #FFFFFF; color: #000000; }
         QTreeWidget, QTableWidget, QListWidget { background-color: #FFFFFF; color: #000000; border: 1px solid #D0D0D0; alternate-background-color: #FFFFFF; }
@@ -390,7 +382,6 @@ if __name__ == "__main__":
         QMenu { background-color: #FFFFFF; color: #000000; border: 1px solid #CCCCCC; }
         QMenu::item:selected { background-color: #0078D7; color: #FFFFFF; }
     """)
-    
     window = CategoryApp()
     window.show()
     sys.exit(app.exec())
